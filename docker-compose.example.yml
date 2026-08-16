@@ -1,0 +1,19 @@
+services:
+  bot:
+    build: .
+    image: your-image-name:latest
+    container_name: your-container-name
+    restart: unless-stopped
+    tty: true
+    environment:
+      # Подключение к MariaDB/MySQL (единственная конфигурация вне БД).
+      DB_HOST: your-mariadb-host
+      DB_PORT: "3306"
+      DB_USER: nyamka
+      DB_PASSWORD: password
+      DB_NAME: nyamka
+      # Только для первого запуска: бот запишет их в таблицу app_config и дальше
+      # читает оттуда — после старта эти строки можно убрать. Либо внесите token и
+      # clientId напрямую в app_config (SQL) и не задавайте их здесь вовсе.
+      BOT_TOKEN: ""
+      CLIENT_ID: ""
