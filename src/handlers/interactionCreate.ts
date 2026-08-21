@@ -57,6 +57,19 @@ export async function handleInteraction(client: BotClient, interaction: Interact
       }
     }
 
+    if (interaction.isAutocomplete()) {
+      if (interaction.commandName === 'запостить') {
+        const { embedsMap } = await import('../embeds/registry');
+        const focused = interaction.options.getFocused().toLowerCase();
+        const choices = [...embedsMap.values()]
+          .filter((e) => e.name.toLowerCase().includes(focused))
+          .slice(0, 25)
+          .map((e) => ({ name: `${e.name} — ${e.description}`.slice(0, 100), value: e.name }));
+        await interaction.respond(choices).catch(() => null);
+      }
+      return;
+    }
+
     if (interaction.isModalSubmit()) {
       for (const handler of client.modals.values()) {
         const match =

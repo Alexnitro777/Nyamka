@@ -42,3 +42,24 @@ export async function loadModals(client: BotClient): Promise<void> {
     client.modals.set(key, handler);
   }
 }
+
+import { loadEmbeds, embedsMap } from '../embeds/registry';
+
+export async function loadEmbedButtons(client: BotClient): Promise<void> {
+  await loadEmbeds();
+  for (const def of embedsMap.values()) {
+    if (def.buttons) {
+      for (const [customId, handler] of Object.entries(def.buttons)) {
+        if (client.buttons.has(customId)) {
+          throw new Error(`Duplicate button customId: ${customId} from embed ${def.name}`);
+        }
+        client.buttons.set(customId, {
+          customId,
+          execute: async (interaction) => {
+            await handler(interaction);
+          },
+        });
+      }
+    }
+  }
+}

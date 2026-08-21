@@ -65,6 +65,17 @@ function hasManageGuild(guild: Guild): boolean {
   return me ? me.permissions.has(PermissionFlagsBits.ManageGuild) : true;
 }
 
+const CACHE_TIMEOUT_MS = 5_000;
+
+function withTimeout<T>(promise: Promise<T>, ms: number, label: string): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((_, reject) =>
+      setTimeout(() => reject(new Error(`timeout after ${ms}ms (${label})`)), ms),
+    ),
+  ]);
+}
+
 async function cacheGuildInvites(guild: Guild): Promise<void> {
   const state = stateFor(guild.id);
 
@@ -75,7 +86,7 @@ async function cacheGuildInvites(guild: Guild): Promise<void> {
   }
 
   try {
-    const invites = await guild.invites.fetch();
+    const invites = await withTimeout(guild.invites.fetch(), CACHE_TIMEOUT_MS, 'invites.fetch');
     snapshotInvites(guild.id, invites);
     console.log(`[inviteTracker] ${guild.name}: закэшировано инвайтов: ${state.invites.size}`);
   } catch (err) {
@@ -86,7 +97,7 @@ async function cacheGuildInvites(guild: Guild): Promise<void> {
   }
 
   try {
-    const vanity = await guild.fetchVanityData();
+    const vanity = await withTimeout(guild.fetchVanityData(), CACHE_TIMEOUT_MS, 'fetchVanityData');
     state.vanityUses = typeof vanity.uses === 'number' ? vanity.uses : null;
   } catch {
     state.vanityUses = null;
@@ -103,12 +114,22 @@ async function detectJoinMethod(guild: Guild): Promise<string> {
 
   let fresh: Collection<string, Invite>;
   try {
-    fresh = await guild.invites.fetch();
-  } catch {
-    return UNKNOWN;
+    fresh = await guild.invites.fetch({ cache: false });
+  } catch (err: any) {
+    const msg = err?.message || 'ошибка';
+    return `Ошибка API: ${msg.substring(0, 30)}`;
   }
 
   const snapshotSize = state.invites.size;
+
+  // Если снапшот пустой — бот только стартовал и не успел закэшировать инвайты.
+  // Обновляем снапшот для следующих заходов и возвращаем Неизвестно.
+  if (snapshotSize === 0) {
+    snapshotInvites(guild.id, fresh);
+    console.warn(`[inviteTracker] ${guild.name}: снапшот был пустым — не можем определить способ входа. Снапшот обновлён.`);
+    return UNKNOWN;
+  }
+
   const strong = new Map<string, string | null>();
   const weak = new Map<string, string | null>();
   const grewCodes: string[] = [];
@@ -148,38 +169,47 @@ async function detectJoinMethod(guild: Guild): Promise<string> {
   );
 
   if (strong.size === 1) {
-    const inviterId = firstValue(strong);
-    return inviterId ? `<@${inviterId}>` : UNKNOWN;
+    const code = strong.keys().next().value as string;
+    const inviterId = strong.get(code);
+    return inviterId ? `<@${inviterId}>` : `Инвайт: ${code}`;
   }
 
   if (strong.size > 1) {
-    console.warn(
-      `[inviteTracker] ${guild.name}: неоднозначно — изменилось несколько инвайтов: [${[...strong.keys()].join(', ')}]. Способ входа «Неизвестно».`,
-    );
-    return UNKNOWN;
+    const codes = [...strong.keys()].join(', ');
+    console.warn(`[inviteTracker] ${guild.name}: неоднозначно — изменилось несколько инвайтов: [${codes}].`);
+    return `Несколько инвайтов: ${codes}`;
   }
 
   try {
-    const vanity = await guild.fetchVanityData();
+    console.log(`[inviteTracker] ${guild.name}: запрашиваем vanity-данные...`);
+    if (!guild.features.includes('VANITY_URL')) {
+      throw new Error('No vanity URL feature');
+    }
+    const vanity = await Promise.race([
+      guild.fetchVanityData(),
+      new Promise<any>((_, reject) => setTimeout(() => reject(new Error('timeout')), 2000))
+    ]);
+    console.log(`[inviteTracker] ${guild.name}: vanity-данные получены`);
     const uses = typeof vanity.uses === 'number' ? vanity.uses : null;
     const prevVanity = state.vanityUses;
     state.vanityUses = uses;
     if (prevVanity !== null && uses !== null && uses > prevVanity) {
       return vanity.code ? `https://discord.gg/${vanity.code}` : VANITY;
     }
-  } catch {
+  } catch (err: any) {
+    console.log(`[inviteTracker] ${guild.name}: vanity-данных нет или ошибка (${err.message})`);
   }
 
   if (weak.size === 1) {
-    const inviterId = firstValue(weak);
-    return inviterId ? `<@${inviterId}>` : UNKNOWN;
+    const code = weak.keys().next().value as string;
+    const inviterId = weak.get(code);
+    return inviterId ? `<@${inviterId}>` : `Новый инвайт: ${code}`;
   }
 
   if (weak.size > 1) {
-    console.warn(
-      `[inviteTracker] ${guild.name}: неоднозначно — несколько ранее неизвестных инвайтов: [${[...weak.keys()].join(', ')}]. Способ входа «Неизвестно».`,
-    );
-    return UNKNOWN;
+    const codes = [...weak.keys()].join(', ');
+    console.warn(`[inviteTracker] ${guild.name}: неоднозначно — несколько ранее неизвестных инвайтов: [${codes}].`);
+    return `Несколько новых: ${codes}`;
   }
 
   return TRAVEL;
@@ -187,8 +217,9 @@ async function detectJoinMethod(guild: Guild): Promise<string> {
 
 export function registerInviteTracker(client: Client): void {
   client.once('ready', async () => {
+    console.log(`[inviteTracker] начинаем кэширование для ${client.guilds.cache.size} серверов...`);
     for (const guild of client.guilds.cache.values()) {
-      await cacheGuildInvites(guild);
+      await runExclusive(guild.id, () => cacheGuildInvites(guild));
     }
 
     setInterval(() => {
@@ -237,7 +268,11 @@ export function registerInviteTracker(client: Client): void {
     if (member.user.bot) return;
     const guildId = member.guild.id;
     void runExclusive(guildId, async () => {
+      // Даем Discord API 2 секунды на обновление счетчика инвайтов
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+      console.log(`[inviteTracker] начинаем detectJoinMethod для ${member.id}...`);
       const method = await detectJoinMethod(member.guild);
+      console.log(`[inviteTracker] detectJoinMethod завершен для ${member.id}, результат: ${method}. Сохраняем в БД...`);
       await saveJoinMethod(guildId, member.id, method);
       console.log(`[inviteTracker] ${member.user.tag} (${member.id}) — способ входа: ${method}`);
     }).catch((err) => console.error('[inviteTracker] ошибка определения способа входа', err));

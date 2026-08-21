@@ -1,7 +1,7 @@
 import { Client, Collection, GatewayIntentBits, Partials } from 'discord.js';
 import { initAppConfig, getAppConfig } from './config';
 import { BotClient } from './types';
-import { loadCommands, loadButtons, loadModals } from './handlers/loader';
+import { loadCommands, loadButtons, loadModals, loadEmbedButtons } from './handlers/loader';
 import { handleInteraction } from './handlers/interactionCreate';
 import { initStorage } from './storage';
 import { closeDb } from './db';
@@ -47,6 +47,7 @@ async function bootstrap(): Promise<void> {
   await loadCommands(client);
   await loadButtons(client);
   await loadModals(client);
+  await loadEmbedButtons(client);
   console.log('[boot] handlers loaded, logging in...');
 
   registerTagRoleEvents(client);
@@ -66,6 +67,8 @@ async function bootstrap(): Promise<void> {
 
   client.once('ready', (c) => {
     console.log(`Logged in as ${c.user.tag}`);
+    const guildList = [...c.guilds.cache.values()].map((g) => `  • ${g.name} (${g.id})`).join('\n');
+    console.log(`[boot] серверов в кэше: ${c.guilds.cache.size}\n${guildList}`);
     void (async () => {
       for (const guild of c.guilds.cache.values()) {
         await registerCommandsForGuild(guild.id).catch((e) =>

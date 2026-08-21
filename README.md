@@ -2,7 +2,7 @@
 
 Discord-бот для верификации участников через анкеты, с модерацией заявок и апелляциями. Дополнительно автоматически выдаёт роль за тег сервера (Server Tag). Команды — слеш-команды (`/верификация`, `/апелляция` — owner; `/анкеты`, `/тег` — staff; `/амнистии`, `/выдатьчсп`, `/снятьчсп` — ststaff), данные хранятся во внешней **MySQL/MariaDB** (через `mysql2`). Бот **мультисерверный**: один процесс обслуживает все серверы, на которых он есть, а роли и каналы настраиваются для каждого сервера отдельно.
 
-> Краткий обзор всех возможностей — в [`docs/features.md`](docs/features.md). Подробный разбор всех сценариев верификации и апелляций — в [`docs/verification-and-appeals.md`](docs/verification-and-appeals.md). Справочник по правам доступа — в [`docs/permissions.md`](docs/permissions.md). Текст заявки на intent — в [`docs/discord-intent-request.md`](docs/discord-intent-request.md).
+> Краткий обзор всех возможностей — в [`docs/features.md`](docs/features.md). Подробный разбор всех сценариев верификации и апелляций — в [`docs/verification-and-appeals.md`](docs/verification-and-appeals.md). Справочник по правам доступа — в [`docs/permissions.md`](docs/permissions.md).
 
 ## 1. Структура проекта
 
@@ -60,8 +60,7 @@ Nyamka/
 ├── docs/
 │   ├── features.md                  Краткий обзор возможностей
 │   ├── verification-and-appeals.md  Полный разбор сценариев верификации и апелляций
-│   ├── permissions.md               Справочник по уровням доступа и правам
-│   └── discord-intent-request.md    Текст заявки на привилегированный intent Server Members
+│   └── permissions.md               Справочник по уровням доступа и правам
 ├── Dockerfile                Сборка образа (multi-stage, node:24.18.0-slim)
 ├── docker-compose.example.yml  Шаблон сервиса bot + переменные окружения
 ├── docker-compose.yml        Реальное описание сервиса (не в git, своё имя image и переменные)
