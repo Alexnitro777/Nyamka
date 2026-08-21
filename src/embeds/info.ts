@@ -120,7 +120,7 @@ const info: EmbedDefinition = {
             '<@&1536532940241109002> - Доступ к чату для срачей.'
           ].join('\n')
         )
-        .setColor(0x3487029);
+        .setColor(0x353535);
       await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     },
 
@@ -153,7 +153,7 @@ const info: EmbedDefinition = {
             '<#1495520501823705128> - Форум, где вы можете делиться чем угодно, скриншотами из игр, постройками, музыкой и т.п. Либо обсуждать любые темы.'
           ].join('\n')
         )
-        .setColor(0x3487029);
+        .setColor(0x353535);
       await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
     },
   },
